@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Copy, Check, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { QrisDisplay } from "@/components/ui/QrisDisplay";
 
 interface Step3Props {
   order: {
@@ -72,10 +73,13 @@ export function Step3Payment({ order, rekeningList, qrImageUrl, onNext }: Step3P
       <div className="mt-6">
         <h4 className="text-sm font-medium text-zinc-200">Rekening & Metode Pembayaran</h4>
         {qrImageUrl && (
-          <figure className="mt-3 rounded-xl border border-[#243028] bg-[#111613] p-4 text-center">
-            <img src={qrImageUrl} alt="QRIS pembayaran cloverbux" className="mx-auto max-h-[28rem] w-full max-w-md rounded-lg object-contain bg-white p-2" />
-            <figcaption className="mt-3 text-sm text-zinc-400">Scan QRIS cloverbux untuk membayar.</figcaption>
-          </figure>
+          <QrisDisplay
+            src={qrImageUrl}
+            alt="QRIS pembayaran cloverbux"
+            title="QRIS Pembayaran"
+            subtitle="Scan QRIS cloverbux untuk membayar."
+            className="mt-3"
+          />
         )}
         <ul className="mt-2.5 space-y-2.5">
           {rekeningList.map((rek) => (

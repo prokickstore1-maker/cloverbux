@@ -2,20 +2,26 @@
 
 import { useState } from "react";
 import { Search, Loader2 } from "lucide-react";
-import { formatRupiah, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CloverIcon } from "@/components/ui/CloverLogo";
+import { QrisDisplay } from "@/components/ui/QrisDisplay";
 
 interface OrderTrackerProps {
   initialCode?: string;
   initialOrder?: any;
   adminWhatsapp?: string;
+  qrImageUrl?: string;
 }
 
 const statusMap: Record<string, { label: string; className: string; desc: string }> = {
+  pending: {
+    label: "Pending",
+    className: "border-amber-500/40 bg-amber-950/30 text-amber-300 font-semibold",
+    desc: "Pesanan ini membutuhkan aktivasi akun sebelum dapat diproses dan dikirimkan.",
+  },
   pending_payment: {
     label: "Menunggu pembayaran",
     className: "border-amber-500/40 bg-amber-950/30 text-amber-300",
@@ -53,7 +59,12 @@ const statusMap: Record<string, { label: string; className: string; desc: string
   },
 };
 
-export function OrderTracker({ initialCode, initialOrder, adminWhatsapp = "" }: OrderTrackerProps) {
+export function OrderTracker({
+  initialCode,
+  initialOrder,
+  adminWhatsapp = "",
+  qrImageUrl = "",
+}: OrderTrackerProps) {
   const [query, setQuery] = useState(initialCode || "");
   const [order, setOrder] = useState<any>(initialOrder || null);
   const [loading, setLoading] = useState(false);
@@ -81,7 +92,24 @@ export function OrderTracker({ initialCode, initialOrder, adminWhatsapp = "" }: 
     }
   };
 
-  const currentStatus = order ? statusMap[order.status] || statusMap.pending_payment : null;
+  const currentStatus = order ? statusMap[order.status] || statusMap.pending : null;
+
+  const detailRows = order
+    ? [
+        ["Order ID", order.orderId],
+        ["Game", order.game ? String(order.game).toUpperCase() : "ROBLOX"],
+        ...(order.gameUserId
+          ? [
+              [
+                "ID Akun",
+                order.gameZoneId
+                  ? `${order.gameUserId} (Zone: ${order.gameZoneId})`
+                  : order.gameUserId,
+              ],
+            ]
+          : []),
+      ]
+    : [];
 
   return (
     <Card className="mx-auto max-w-xl p-5 shadow-2xl sm:p-8 bg-[#161c18] border-[#243028] text-white">
@@ -89,7 +117,9 @@ export function OrderTracker({ initialCode, initialOrder, adminWhatsapp = "" }: 
         <CloverIcon className="h-3.5 w-3.5" />
         <span>Lacak Pesanan cloverbux</span>
       </div>
-      <h2 className="text-center text-2xl font-bold tracking-tight text-white font-heading">Status Pesanan</h2>
+      <h2 className="text-center text-2xl font-bold tracking-tight text-white font-heading">
+        Status Pesanan
+      </h2>
       <p className="mt-1 text-center text-sm text-zinc-400">
         Masukkan kode unik 8 karakter atau nomor Order ID Anda.
       </p>
@@ -99,7 +129,7 @@ export function OrderTracker({ initialCode, initialOrder, adminWhatsapp = "" }: 
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value.toUpperCase())}
-          placeholder="Contoh: A3X7K9M2 atau RBX-2026..."
+          placeholder="Masukkan kode atau Order ID"
           aria-label="Kode cek atau Order ID"
           className="min-w-0 uppercase bg-[#111613] border-[#243028] text-white placeholder:text-zinc-600 focus-visible:ring-[#00b869]"
         />
@@ -123,7 +153,9 @@ export function OrderTracker({ initialCode, initialOrder, adminWhatsapp = "" }: 
         <div className="mt-6 border-t border-[#243028] pt-5">
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm text-zinc-400">Status pesanan</span>
-            <Badge variant="outline" className={currentStatus.className}>{currentStatus.label}</Badge>
+            <Badge variant="outline" className={currentStatus.className}>
+              {currentStatus.label}
+            </Badge>
           </div>
           <p className="mt-3 rounded-xl bg-[#111613] border border-[#243028] p-3.5 text-sm leading-6 text-zinc-300">
             {currentStatus.desc}
@@ -135,16 +167,21 @@ export function OrderTracker({ initialCode, initialOrder, adminWhatsapp = "" }: 
             </p>
           )}
 
+          {/* Render QRIS jika butuh aktivasi dan QR tersedia */}
+          {order.requiresActivation && qrImageUrl && (
+            <QrisDisplay
+              src={qrImageUrl}
+              alt="QRIS Aktivasi Pesanan"
+              title="QRIS Aktivasi Akun"
+              subtitle="Scan QRIS di atas untuk menyelesaikan aktivasi pesanan Anda."
+              className="mt-4"
+            />
+          )}
+
+          {/* Baris detail: hanya Order ID, Game, dan ID Akun */}
           <dl className="mt-4 divide-y divide-[#243028] rounded-xl border border-[#243028] bg-[#111613] px-4 text-sm">
-            {[
-              ["Order ID", order.orderId],
-              ["Game", (order.game ? order.game.toUpperCase() : "ROBLOX")],
-              ["Paket Item", order.itemName || (order.robuxAmount ? `${order.robuxAmount.toLocaleString("id-ID")} Robux` : "-")],
-              ...(order.gameUserId ? [["ID Akun", order.gameZoneId ? `${order.gameUserId} (Zone: ${order.gameZoneId})` : order.gameUserId]] : []),
-              ["Total harga", formatRupiah(order.totalPrice)],
-              ["Waktu order", formatDate(order.createdAt)],
-            ].map(([label, value]) => (
-              <div key={label as string} className="flex justify-between gap-4 py-2.5">
+            {detailRows.map(([label, value]) => (
+              <div key={label} className="flex justify-between gap-4 py-2.5">
                 <dt className="text-zinc-400">{label}</dt>
                 <dd className="text-right font-medium text-white">{value}</dd>
               </div>
@@ -154,7 +191,9 @@ export function OrderTracker({ initialCode, initialOrder, adminWhatsapp = "" }: 
           <div className="mt-5 text-center">
             {adminWhatsapp && (
               <a
-                href={`https://wa.me/${adminWhatsapp}?text=${encodeURIComponent(`Halo Admin cloverbux, saya ingin menanyakan status pesanan saya dengan Order ID: ${order.orderId} (Kode: ${order.code})`)}`}
+                href={`https://wa.me/${adminWhatsapp}?text=${encodeURIComponent(
+                  `Halo Admin cloverbux, saya ingin menanyakan status pesanan saya dengan Order ID: ${order.orderId}`
+                )}`}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex min-h-11 items-center text-sm font-semibold text-[#00b869] underline underline-offset-4 transition-colors duration-150 hover:text-emerald-300"

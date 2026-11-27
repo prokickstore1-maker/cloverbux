@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { formatRupiah, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { Step3Payment } from "./Step3Payment";
 import { Step4UploadProof } from "./Step4UploadProof";
 import { Step5Success } from "./Step5Success";
 import { createOrderAction, submitPaymentProofAction } from "@/app/actions/order";
-import { Check, ArrowLeft, Loader2, Info } from "lucide-react";
+import { Check, ArrowLeft, Loader2, Info, AlertCircle, RefreshCw } from "lucide-react";
 import type { GameConfig } from "@/lib/games";
 
 interface DynamicCheckoutWizardProps {
@@ -55,12 +55,88 @@ export function DynamicCheckoutWizard({
     gameZoneId: "",
   });
 
+  // Account validation state
+  const [validation, setValidation] = useState<{
+    state: "idle" | "loading" | "valid" | "not_found" | "format_only" | "unavailable";
+    nickname?: string;
+    username?: string;
+    region?: string;
+    avatarUrl?: string;
+    message?: string;
+    source?: "official" | "community" | "format";
+  }>({ state: "idle" });
+  const [retryKey, setRetryKey] = useState(0);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Created order data
   const [createdOrder, setCreatedOrder] = useState<any>(null);
   const [proofToken, setProofToken] = useState("");
+
+  // Auto-validation effect with 700ms debounce
+  useEffect(() => {
+    if (step !== 2) return;
+
+    const uid = formData.gameUserId.trim();
+    const zone = formData.gameZoneId.trim();
+
+    // Cek batas minimal karakter sebelum panggil API
+    let meetsMin = false;
+    if (gameConfig.id === "roblox") {
+      meetsMin = uid.length >= 3;
+    } else if (gameConfig.id === "mlbb") {
+      meetsMin = uid.length >= 5 && zone.length >= 3;
+    } else {
+      meetsMin = uid.length >= 5;
+    }
+
+    if (!meetsMin) {
+      setValidation({ state: "idle" });
+      return;
+    }
+
+    setValidation({ state: "loading" });
+    const controller = new AbortController();
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/game/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            game: gameConfig.id,
+            userId: uid,
+            zoneId: zone || undefined,
+          }),
+          signal: controller.signal,
+        });
+
+        const data = await res.json();
+        setValidation({
+          state: data.status || "unavailable",
+          nickname: data.nickname,
+          username: data.username,
+          region: data.region,
+          avatarUrl: data.avatarUrl,
+          message: data.message,
+          source: data.source,
+        });
+      } catch (err: any) {
+        if (err.name === "AbortError") return;
+        setValidation({
+          state: "unavailable",
+          message: "Server verifikasi sedang tidak merespons.",
+          source: gameConfig.id === "roblox" ? "official" : "community",
+        });
+      }
+    }, 700);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [step, formData.gameUserId, formData.gameZoneId, gameConfig.id, retryKey]);
 
   const steps = [
     `Pilih ${gameConfig.shortName}`,
@@ -86,6 +162,17 @@ export function DynamicCheckoutWizard({
 
     if (!formData.gameUserId.trim()) {
       setError(`${gameConfig.fields[0]?.label || "ID Akun"} wajib diisi.`);
+      return;
+    }
+
+    // Aturan non-blocking checkout:
+    // Hanya blokir submit bila gameConfig.id === "roblox" && validation.state === "not_found" && validation.source === "official"
+    if (
+      gameConfig.id === "roblox" &&
+      validation.state === "not_found" &&
+      validation.source === "official"
+    ) {
+      setError("Username Roblox tidak ditemukan. Periksa kembali username akun Anda.");
       return;
     }
 
@@ -271,30 +358,152 @@ export function DynamicCheckoutWizard({
 
           <div className="mt-5 space-y-4">
             {/* Game Specific Fields */}
-            {gameConfig.fields.map((field) => (
-              <div key={field.key}>
-                <label htmlFor={field.key} className="block text-sm font-medium text-zinc-200">
-                  {field.label} <span className="text-[#00b869]">*</span>
-                </label>
-                <Input
-                  id={field.key}
-                  type={field.type || "text"}
-                  required={field.required}
-                  value={field.key === "gameZoneId" ? formData.gameZoneId : formData.gameUserId}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      [field.key === "gameZoneId" ? "gameZoneId" : "gameUserId"]: e.target.value,
-                    }))
-                  }
-                  placeholder={field.placeholder}
-                  className="mt-1.5 bg-[#111613] border-[#243028] text-white placeholder:text-zinc-600 focus-visible:ring-[#00b869] focus-visible:border-[#00b869]"
-                />
-                {field.helperText && (
-                  <p className="mt-1 text-xs text-zinc-400">{field.helperText}</p>
+            {gameConfig.fields.length === 2 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {gameConfig.fields.map((field) => (
+                  <div key={field.key}>
+                    <label htmlFor={field.key} className="block text-sm font-medium text-zinc-200">
+                      {field.label} <span className="text-[#00b869]">*</span>
+                    </label>
+                    <Input
+                      id={field.key}
+                      type={field.type || "text"}
+                      required={field.required}
+                      value={field.key === "gameZoneId" ? formData.gameZoneId : formData.gameUserId}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          [field.key === "gameZoneId" ? "gameZoneId" : "gameUserId"]: e.target.value,
+                        }))
+                      }
+                      placeholder={field.placeholder}
+                      className="mt-1.5 bg-[#111613] border-[#243028] text-white placeholder:text-zinc-600 focus-visible:ring-[#00b869] focus-visible:border-[#00b869]"
+                    />
+                    {field.helperText && (
+                      <p className="mt-1 text-xs text-zinc-400">{field.helperText}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              gameConfig.fields.map((field) => (
+                <div key={field.key}>
+                  <label htmlFor={field.key} className="block text-sm font-medium text-zinc-200">
+                    {field.label} <span className="text-[#00b869]">*</span>
+                  </label>
+                  <Input
+                    id={field.key}
+                    type={field.type || "text"}
+                    required={field.required}
+                    value={field.key === "gameZoneId" ? formData.gameZoneId : formData.gameUserId}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        [field.key === "gameZoneId" ? "gameZoneId" : "gameUserId"]: e.target.value,
+                      }))
+                    }
+                    placeholder={field.placeholder}
+                    className="mt-1.5 bg-[#111613] border-[#243028] text-white placeholder:text-zinc-600 focus-visible:ring-[#00b869] focus-visible:border-[#00b869]"
+                  />
+                  {field.helperText && (
+                    <p className="mt-1 text-xs text-zinc-400">{field.helperText}</p>
+                  )}
+                </div>
+              ))
+            )}
+
+            {/* Account Validation Status Banner */}
+            {validation.state === "loading" && (
+              <div className="flex items-center gap-2 rounded-xl border border-[#243028] bg-[#111613] p-3 text-xs text-zinc-300">
+                <Loader2 className="h-4 w-4 animate-spin text-[#00b869] shrink-0" />
+                <span>Memeriksa data akun...</span>
+              </div>
+            )}
+
+            {validation.state === "valid" && (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3 text-xs text-emerald-200">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {validation.avatarUrl ? (
+                    <img
+                      src={validation.avatarUrl}
+                      alt={validation.nickname || "Avatar"}
+                      className="h-9 w-9 rounded-full border border-emerald-500/50 bg-[#161c18] object-cover shrink-0"
+                    />
+                  ) : (
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/20 text-[#00b869] shrink-0">
+                      <Check className="h-4 w-4 stroke-[3]" />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-bold text-white truncate text-sm">
+                        {validation.nickname}
+                      </span>
+                      {validation.username && validation.username !== validation.nickname && (
+                        <span className="text-[11px] text-zinc-400 font-mono">
+                          (@{validation.username})
+                        </span>
+                      )}
+                      {validation.region && (
+                        <span className="rounded bg-emerald-900/60 px-1.5 py-0.2 text-[10px] text-emerald-300 font-semibold uppercase">
+                          dari {validation.region}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-emerald-400 flex items-center gap-1 mt-0.5">
+                      <Check className="h-3 w-3" /> Akun terverifikasi
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {validation.state === "not_found" && (
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-red-800/50 bg-red-950/30 p-3 text-xs text-red-300">
+                <div className="flex items-center gap-2 min-w-0">
+                  <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+                  <span className="truncate">{validation.message || "Akun tidak ditemukan. Periksa kembali ID Anda."}</span>
+                </div>
+                {validation.source !== "official" && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setRetryKey((k) => k + 1)}
+                    className="h-7 px-2 text-xs text-red-300 hover:text-white hover:bg-red-900/40 shrink-0"
+                  >
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Cek ulang
+                  </Button>
                 )}
               </div>
-            ))}
+            )}
+
+            {validation.state === "unavailable" && (
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-amber-500/40 bg-amber-950/20 p-3 text-xs text-amber-200">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Info className="h-4 w-4 text-amber-400 shrink-0" />
+                  <span className="truncate">{validation.message || "Server verifikasi sedang tidak merespons. Anda tetap dapat melanjutkan order."}</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setRetryKey((k) => k + 1)}
+                  className="h-7 px-2 text-xs text-amber-300 hover:text-white hover:bg-amber-900/40 shrink-0"
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Cek ulang
+                </Button>
+              </div>
+            )}
+
+            {validation.state === "format_only" && (
+              <div className="flex items-center gap-2 rounded-xl border border-[#243028] bg-[#111613] p-2.5 text-xs text-zinc-300">
+                <Check className="h-3.5 w-3.5 text-[#00b869] shrink-0" />
+                <span>{validation.message || "Format ID valid."}</span>
+              </div>
+            )}
 
             {/* Buyer Contact Fields */}
             <div>

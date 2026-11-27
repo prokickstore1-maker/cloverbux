@@ -22,6 +22,7 @@ export default async function OrderAliasPage({ params }: Props) {
   const initialOrder = found ? toPublicOrder(found) : null;
 
   const adminWhatsapp = await getConfigValue<string>("admin_whatsapp", DEFAULT_ADMIN_WHATSAPP);
+  const qrImageUrl = await getConfigValue<string>("qr_image_url", "");
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -31,6 +32,7 @@ export default async function OrderAliasPage({ params }: Props) {
           initialCode={initialOrder ? id : ""}
           initialOrder={initialOrder ?? undefined}
           adminWhatsapp={adminWhatsapp}
+          qrImageUrl={qrImageUrl}
         />
       </main>
       <Footer />

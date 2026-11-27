@@ -56,6 +56,8 @@ export function Step4UploadProof({ orderId, proofToken, onSubmitProof, onSuccess
     try {
       const form = new FormData();
       form.append("file", file);
+      form.append("orderId", orderId);
+      form.append("proofToken", proofToken);
 
       const res = await fetch("/api/upload", {
         method: "POST",
