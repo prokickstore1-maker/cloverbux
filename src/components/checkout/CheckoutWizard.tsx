@@ -15,11 +15,12 @@ interface CheckoutWizardProps {
   pricing: PricingItem[];
   rekeningList: RekeningItem[];
   qrImageUrl?: string;
+  adminWhatsapp?: string;
 }
 
 const steps = ["Nominal", "Akun", "Transfer", "Bukti", "Selesai"];
 
-export function CheckoutWizard({ initialRobux, pricing, rekeningList, qrImageUrl }: CheckoutWizardProps) {
+export function CheckoutWizard({ initialRobux, pricing, rekeningList, qrImageUrl, adminWhatsapp }: CheckoutWizardProps) {
   const [step, setStep] = useState(1);
   const [selectedRobux, setSelectedRobux] = useState<number | null>(
     initialRobux ?? pricing[0]?.robux ?? null,
@@ -133,7 +134,9 @@ export function CheckoutWizard({ initialRobux, pricing, rekeningList, qrImageUrl
           onSuccess={() => setStep(5)}
         />
       )}
-      {step === 5 && createdOrder && <Step5Success order={createdOrder} />}
+      {step === 5 && createdOrder && (
+        <Step5Success order={createdOrder} adminWhatsapp={adminWhatsapp} />
+      )}
     </Card>
   );
 }

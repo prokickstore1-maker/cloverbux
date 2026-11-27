@@ -4,7 +4,7 @@ import { Footer } from "@/components/Footer";
 import { DynamicCheckoutWizard } from "@/components/checkout/DynamicCheckoutWizard";
 import { getGameConfig, GameConfig } from "@/lib/games";
 import { getConfigValue, RekeningItem } from "@/services/config";
-import { DEFAULT_REKENING, getDefaultPackagesForGame, UniversalGamePackage } from "@/services/defaults";
+import { DEFAULT_ADMIN_WHATSAPP, DEFAULT_REKENING, getDefaultPackagesForGame, UniversalGamePackage } from "@/services/defaults";
 import { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -35,10 +35,11 @@ export default async function TopupGamePage({ params, searchParams }: PageProps)
   }
 
   const defaultPackages = getDefaultPackagesForGame(gameConfig.id);
-  const [rawPackages, rekeningList, qrImageUrl] = await Promise.all([
+  const [rawPackages, rekeningList, qrImageUrl, adminWhatsapp] = await Promise.all([
     getConfigValue<any[]>(gameConfig.configKey, defaultPackages),
     getConfigValue<RekeningItem[]>("rekening", DEFAULT_REKENING),
     getConfigValue<string>("qr_image_url", ""),
+    getConfigValue<string>("admin_whatsapp", DEFAULT_ADMIN_WHATSAPP),
   ]);
 
   const packages: UniversalGamePackage[] = (rawPackages && rawPackages.length > 0 ? rawPackages : defaultPackages).map(
@@ -82,6 +83,7 @@ export default async function TopupGamePage({ params, searchParams }: PageProps)
             packages={packages && packages.length > 0 ? packages : defaultPackages}
             rekeningList={rekeningList}
             qrImageUrl={qrImageUrl}
+            adminWhatsapp={adminWhatsapp}
             initialPackageId={initialPackageId}
           />
         </div>

@@ -18,6 +18,7 @@ interface DynamicCheckoutWizardProps {
   packages?: Array<{ id: string; name: string; price: number; amount?: number }>;
   rekeningList: Array<{ bank: string; nomor: string; atasNama: string }>;
   qrImageUrl?: string;
+  adminWhatsapp?: string;
   initialPackageId?: string;
   defaultPackages?: Array<{ id: string; name: string; price: number; amount?: number }>;
 }
@@ -27,6 +28,7 @@ export function DynamicCheckoutWizard({
   packages,
   rekeningList,
   qrImageUrl,
+  adminWhatsapp,
   initialPackageId,
   defaultPackages,
 }: DynamicCheckoutWizardProps) {
@@ -603,7 +605,9 @@ export function DynamicCheckoutWizard({
       )}
 
       {/* Step 5: Success Summary */}
-      {step === 5 && createdOrder && <Step5Success order={createdOrder} />}
+      {step === 5 && createdOrder && (
+        <Step5Success order={createdOrder} adminWhatsapp={adminWhatsapp} />
+      )}
     </Card>
   );
 }
